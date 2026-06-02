@@ -1,4 +1,5 @@
-use crate::prelude::*;
+use super::prelude::*;
+use std::fmt::Write;
 
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub struct Board {
@@ -108,6 +109,50 @@ impl Board {
         moves
     }
 
+    pub fn count_pieces(&self, player: Player) -> usize {
+        let me = match player {
+            Player::Black => self.black,
+            Player::White => self.white,
+        };
+
+        me.count_ones() as usize
+    }
+
+    pub fn pretty(&self, indent: &str) -> Result<String, std::fmt::Error> {
+        let mut output = String::new();
+
+        writeln!(output, "{}   a b c d e f g h", indent)?;
+
+        let legal = self.legal();
+
+        for i in 0..8 {
+            write!(output, "{}{} \x1B[42m", indent, i + 1)?;
+
+            for j in 0..8 {
+                match self.get(Position::index(i, j)) {
+                    Some(player) => {
+                        write!(output, "{} ●\x1B[39m", player.ascii_color_code())?;
+                    }
+                    None => {
+                        if legal.get(Position::index(i, j)) {
+                            write!(output, "{} •\x1B[39m", self.to_play.ascii_color_code())?;
+                        } else {
+                            write!(output, "\x1B[37m •\x1B[39m")?;
+                        }
+                    }
+                }
+            }
+
+            write!(output, "\x1B[49m")?;
+
+            if i < 7 {
+                writeln!(output)?;
+            }
+        }
+
+        Ok(output)
+    }
+
     fn s_ray(me: u64, op: u64, mask: u64, pos: u64, shift: impl Fn(u64) -> u64, flips: &mut u64) {
         let mut x = shift(pos) & mask;
         let mut f = 0u64;
@@ -150,29 +195,7 @@ impl std::fmt::Display for Board {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "Board(")?;
         writeln!(f, "  {} to play", self.to_play)?;
-        writeln!(f, "     a b c d e f g h")?;
-
-        let legal = self.legal();
-
-        for i in 0..8 {
-            write!(f, "  {} \x1B[42m", i + 1)?;
-
-            for j in 0..8 {
-                match self.get(Position::index(i, j)) {
-                    Some(player) => write!(f, "{} ●\x1B[39m", player.ascii_color_code())?,
-                    None => {
-                        if legal.get(Position::index(i, j)) {
-                            write!(f, "{} •\x1B[39m", self.to_play.ascii_color_code())?
-                        } else {
-                            write!(f, "\x1B[37m •\x1B[39m")?
-                        }
-                    }
-                }
-            }
-
-            writeln!(f, "\x1B[49m")?;
-        }
-
+        writeln!(f, "{}", self.pretty("  ")?)?;
         writeln!(f, ")")?;
         Ok(())
     }

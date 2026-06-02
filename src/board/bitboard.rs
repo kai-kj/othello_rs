@@ -1,11 +1,11 @@
-use crate::prelude::*;
+use super::prelude::*;
 use std::fmt::Write;
 
 pub type BitBoard = u64;
 
 pub trait BitBoardExt {
     fn get(&self, position: Position) -> bool;
-    fn pretty(&self) -> String;
+    fn pretty(&self) -> Result<String, std::fmt::Error>;
 }
 
 impl BitBoardExt for BitBoard {
@@ -13,10 +13,10 @@ impl BitBoardExt for BitBoard {
         (self >> ((7 - position.row) * 8 + position.col)) & 1 != 0
     }
 
-    fn pretty(&self) -> String {
+    fn pretty(&self) -> Result<String, std::fmt::Error> {
         let mut output = String::new();
 
-        writeln!(output, "BitBoard(").unwrap();
+        writeln!(output, "BitBoard(")?;
 
         for i in 0..8 {
             let line = self >> ((7 - i) * 8) & 0xff;
@@ -25,13 +25,12 @@ impl BitBoardExt for BitBoard {
                 output,
                 "  {},",
                 line.split("").collect::<Vec<_>>().join(" ").trim()
-            )
-            .unwrap();
+            )?;
         }
 
-        writeln!(output, ")").unwrap();
+        writeln!(output, ")")?;
 
-        output
+        Ok(output)
     }
 }
 
@@ -109,7 +108,7 @@ mod tests {
         );
 
         assert_eq!(
-            board.pretty(),
+            board.pretty().unwrap(),
             "BitBoard(\n  0 0 0 0 0 0 0 0,\n  0 0 0 0 0 0 0 0,\n  0 0 0 0 0 0 0 0,\n  0 0 0 0 0 1 0 0,\n  0 0 0 1 0 0 0 0,\n  0 0 0 0 0 1 0 0,\n  0 0 0 0 0 0 0 0,\n  0 0 0 0 0 0 0 0,\n)\n"
         )
     }
