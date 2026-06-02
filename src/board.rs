@@ -1,69 +1,45 @@
 use crate::prelude::*;
 
 #[derive(Copy, Clone, PartialEq, Eq)]
-pub enum Player {
-    Black,
-    White,
-}
-
-impl Player {
-    pub fn ascii_color_code(&self) -> &'static str {
-        match self {
-            Player::Black => "\x1B[30m",
-            Player::White => "\x1B[97m",
-        }
-    }
-}
-
-impl std::fmt::Debug for Player {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Player::Black => write!(f, "Player::Black"),
-            Player::White => write!(f, "Player::White"),
-        }
-    }
-}
-
-impl std::fmt::Display for Player {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Player::Black => write!(f, "black"),
-            Player::White => write!(f, "white"),
-        }
-    }
-}
-
 pub struct Board {
-    pub to_play: Player,
     pub black: BitBoard,
     pub white: BitBoard,
+    pub to_play: Player,
 }
 
 impl Board {
-    pub fn new() -> Board {
+    pub fn new(black: BitBoard, white: BitBoard, to_play: Player) -> Board {
         Board {
-            to_play: Player::Black,
-            black: bb!(
-                0 0 0 0 0 0 0 0,
-                0 0 0 0 0 0 0 0,
-                0 0 0 0 0 0 0 0,
-                0 0 0 0 1 0 0 0,
-                0 0 0 1 0 0 0 0,
-                0 0 0 0 0 0 0 0,
-                0 0 0 0 0 0 0 0,
-                0 0 0 0 0 0 0 0,
-            ),
-            white: bb!(
-                0 0 0 0 0 0 0 0,
-                0 0 0 0 0 0 0 0,
-                0 0 0 0 0 0 0 0,
-                0 0 0 1 0 0 0 0,
-                0 0 0 0 1 0 0 0,
-                0 0 0 0 0 0 0 0,
-                0 0 0 0 0 0 0 0,
-                0 0 0 0 0 0 0 0,
-            ),
+            black,
+            white,
+            to_play,
         }
+    }
+
+    pub fn start() -> Board {
+        Board::new(
+            bb!(
+                0 0 0 0 0 0 0 0,
+                0 0 0 0 0 0 0 0,
+                0 0 0 0 0 0 0 0,
+                0 0 0 0 1 0 0 0,
+                0 0 0 1 0 0 0 0,
+                0 0 0 0 0 0 0 0,
+                0 0 0 0 0 0 0 0,
+                0 0 0 0 0 0 0 0,
+            ),
+            bb!(
+                0 0 0 0 0 0 0 0,
+                0 0 0 0 0 0 0 0,
+                0 0 0 0 0 0 0 0,
+                0 0 0 1 0 0 0 0,
+                0 0 0 0 1 0 0 0,
+                0 0 0 0 0 0 0 0,
+                0 0 0 0 0 0 0 0,
+                0 0 0 0 0 0 0 0,
+            ),
+            Player::Black,
+        )
     }
 
     pub fn get(&self, position: Position) -> Option<Player> {
@@ -85,30 +61,14 @@ impl Board {
 
         let mut flips: u64 = 0;
 
-        macro_rules! ray {
-            ($shift:expr, $mask:expr) => {{
-                let mut x = $shift(pos) & $mask;
-                let mut f = 0u64;
-
-                while x != 0u64 && (x & op) != 0u64 {
-                    f |= x;
-                    x = $shift(x) & $mask;
-                }
-
-                if (x & me) != 0u64 {
-                    flips |= f;
-                }
-            }};
-        }
-
-        ray!(|b| b << 1, 0x7f7f7f7f7f7f7f7fu64);
-        ray!(|b| b >> 1, 0xfefefefefefefefeu64);
-        ray!(|b| b << 8, 0xffffffffffffffffu64);
-        ray!(|b| b >> 8, 0xffffffffffffffffu64);
-        ray!(|b| b << 9, 0x7f7f7f7f7f7f7f7fu64);
-        ray!(|b| b << 7, 0xfefefefefefefefeu64);
-        ray!(|b| b >> 7, 0x7f7f7f7f7f7f7f7fu64);
-        ray!(|b| b >> 9, 0xfefefefefefefefeu64);
+        Self::s_ray(me, op, 0x7f7f7f7f7f7f7f7fu64, pos, |b| b << 1, &mut flips);
+        Self::s_ray(me, op, 0xfefefefefefefefeu64, pos, |b| b >> 1, &mut flips);
+        Self::s_ray(me, op, 0xffffffffffffffffu64, pos, |b| b << 8, &mut flips);
+        Self::s_ray(me, op, 0xffffffffffffffffu64, pos, |b| b >> 8, &mut flips);
+        Self::s_ray(me, op, 0x7f7f7f7f7f7f7f7fu64, pos, |b| b << 9, &mut flips);
+        Self::s_ray(me, op, 0xfefefefefefefefeu64, pos, |b| b << 7, &mut flips);
+        Self::s_ray(me, op, 0x7f7f7f7f7f7f7f7fu64, pos, |b| b >> 7, &mut flips);
+        Self::s_ray(me, op, 0xfefefefefefefefeu64, pos, |b| b >> 9, &mut flips);
 
         me |= pos | flips;
         op &= !flips;
@@ -136,31 +96,43 @@ impl Board {
         let empty = !(me | op);
         let mut moves = 0u64;
 
-        macro_rules! ray {
-            ($shift:expr, $mask:expr) => {{
-                let mut x = $shift(me) & $mask & op;
-
-                while x != 0u64 {
-                    let next = $shift(x) & $mask;
-                    let candidates = next & empty;
-
-                    moves |= candidates;
-
-                    x = next & op;
-                }
-            }};
-        }
-
-        ray!(|b| b << 1, 0x7f7f7f7f7f7f7f7fu64);
-        ray!(|b| b >> 1, 0xfefefefefefefefeu64);
-        ray!(|b| b << 8, 0xffffffffffffffffu64);
-        ray!(|b| b >> 8, 0xffffffffffffffffu64);
-        ray!(|b| b << 9, 0x7f7f7f7f7f7f7f7fu64);
-        ray!(|b| b << 7, 0xfefefefefefefefeu64);
-        ray!(|b| b >> 7, 0x7f7f7f7f7f7f7f7fu64);
-        ray!(|b| b >> 9, 0xfefefefefefefefeu64);
+        Self::l_ray(me, op, 0x7f7f7f7f7f7f7f7fu64, empty, |b| b << 1, &mut moves);
+        Self::l_ray(me, op, 0xfefefefefefefefeu64, empty, |b| b >> 1, &mut moves);
+        Self::l_ray(me, op, 0xffffffffffffffffu64, empty, |b| b << 8, &mut moves);
+        Self::l_ray(me, op, 0xffffffffffffffffu64, empty, |b| b >> 8, &mut moves);
+        Self::l_ray(me, op, 0x7f7f7f7f7f7f7f7fu64, empty, |b| b << 9, &mut moves);
+        Self::l_ray(me, op, 0xfefefefefefefefeu64, empty, |b| b << 7, &mut moves);
+        Self::l_ray(me, op, 0x7f7f7f7f7f7f7f7fu64, empty, |b| b >> 7, &mut moves);
+        Self::l_ray(me, op, 0xfefefefefefefefeu64, empty, |b| b >> 9, &mut moves);
 
         moves
+    }
+
+    fn s_ray(me: u64, op: u64, mask: u64, pos: u64, shift: impl Fn(u64) -> u64, flips: &mut u64) {
+        let mut x = shift(pos) & mask;
+        let mut f = 0u64;
+
+        while x != 0u64 && (x & op) != 0u64 {
+            f |= x;
+            x = shift(x) & mask;
+        }
+
+        if (x & me) != 0u64 {
+            *flips |= f;
+        }
+    }
+
+    fn l_ray(me: u64, op: u64, mask: u64, empty: u64, shift: impl Fn(u64) -> u64, moves: &mut u64) {
+        let mut x = shift(me) & mask & op;
+
+        while x != 0u64 {
+            let next = shift(x) & mask;
+            let candidates = next & empty;
+
+            *moves |= candidates;
+
+            x = next & op;
+        }
     }
 }
 
@@ -184,6 +156,7 @@ impl std::fmt::Display for Board {
 
         for i in 0..8 {
             write!(f, "  {} \x1B[42m", i + 1)?;
+
             for j in 0..8 {
                 match self.get(Position::index(i, j)) {
                     Some(player) => write!(f, "{} ●\x1B[39m", player.ascii_color_code())?,
@@ -196,10 +169,202 @@ impl std::fmt::Display for Board {
                     }
                 }
             }
+
             writeln!(f, "\x1B[49m")?;
         }
 
         writeln!(f, ")")?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_set() {
+        let mut board = Board::start();
+
+        assert_eq!(
+            board,
+            Board::new(
+                bb!(
+                    0 0 0 0 0 0 0 0,
+                    0 0 0 0 0 0 0 0,
+                    0 0 0 0 0 0 0 0,
+                    0 0 0 0 1 0 0 0,
+                    0 0 0 1 0 0 0 0,
+                    0 0 0 0 0 0 0 0,
+                    0 0 0 0 0 0 0 0,
+                    0 0 0 0 0 0 0 0,
+                ),
+                bb!(
+                    0 0 0 0 0 0 0 0,
+                    0 0 0 0 0 0 0 0,
+                    0 0 0 0 0 0 0 0,
+                    0 0 0 1 0 0 0 0,
+                    0 0 0 0 1 0 0 0,
+                    0 0 0 0 0 0 0 0,
+                    0 0 0 0 0 0 0 0,
+                    0 0 0 0 0 0 0 0,
+                ),
+                Player::Black,
+            )
+        );
+
+        board.set(Position::parse("c4").unwrap());
+
+        assert_eq!(
+            board,
+            Board::new(
+                bb!(
+                    0 0 0 0 0 0 0 0,
+                    0 0 0 0 0 0 0 0,
+                    0 0 0 0 0 0 0 0,
+                    0 0 1 1 1 0 0 0,
+                    0 0 0 1 0 0 0 0,
+                    0 0 0 0 0 0 0 0,
+                    0 0 0 0 0 0 0 0,
+                    0 0 0 0 0 0 0 0,
+                ),
+                bb!(
+                    0 0 0 0 0 0 0 0,
+                    0 0 0 0 0 0 0 0,
+                    0 0 0 0 0 0 0 0,
+                    0 0 0 0 0 0 0 0,
+                    0 0 0 0 1 0 0 0,
+                    0 0 0 0 0 0 0 0,
+                    0 0 0 0 0 0 0 0,
+                    0 0 0 0 0 0 0 0,
+                ),
+                Player::White,
+            )
+        );
+
+        board.set(Position::parse("c3").unwrap());
+
+        assert_eq!(
+            board,
+            Board::new(
+                bb!(
+                    0 0 0 0 0 0 0 0,
+                    0 0 0 0 0 0 0 0,
+                    0 0 0 0 0 0 0 0,
+                    0 0 1 0 1 0 0 0,
+                    0 0 0 1 0 0 0 0,
+                    0 0 0 0 0 0 0 0,
+                    0 0 0 0 0 0 0 0,
+                    0 0 0 0 0 0 0 0,
+                ),
+                bb!(
+                    0 0 0 0 0 0 0 0,
+                    0 0 0 0 0 0 0 0,
+                    0 0 1 0 0 0 0 0,
+                    0 0 0 1 0 0 0 0,
+                    0 0 0 0 1 0 0 0,
+                    0 0 0 0 0 0 0 0,
+                    0 0 0 0 0 0 0 0,
+                    0 0 0 0 0 0 0 0,
+                ),
+                Player::Black,
+            )
+        );
+
+        board.set(Position::parse("f5").unwrap());
+
+        assert_eq!(
+            board,
+            Board::new(
+                bb!(
+                    0 0 0 0 0 0 0 0,
+                    0 0 0 0 0 0 0 0,
+                    0 0 0 0 0 0 0 0,
+                    0 0 1 0 1 0 0 0,
+                    0 0 0 1 1 1 0 0,
+                    0 0 0 0 0 0 0 0,
+                    0 0 0 0 0 0 0 0,
+                    0 0 0 0 0 0 0 0,
+                ),
+                bb!(
+                    0 0 0 0 0 0 0 0,
+                    0 0 0 0 0 0 0 0,
+                    0 0 1 0 0 0 0 0,
+                    0 0 0 1 0 0 0 0,
+                    0 0 0 0 0 0 0 0,
+                    0 0 0 0 0 0 0 0,
+                    0 0 0 0 0 0 0 0,
+                    0 0 0 0 0 0 0 0,
+                ),
+                Player::White,
+            )
+        );
+    }
+
+    #[test]
+    fn test_legal() {
+        let mut board = Board::start();
+
+        assert_eq!(
+            board.legal(),
+            bb!(
+                0 0 0 0 0 0 0 0,
+                0 0 0 0 0 0 0 0,
+                0 0 0 1 0 0 0 0,
+                0 0 1 0 0 0 0 0,
+                0 0 0 0 0 1 0 0,
+                0 0 0 0 1 0 0 0,
+                0 0 0 0 0 0 0 0,
+                0 0 0 0 0 0 0 0,
+            ),
+        );
+
+        board.set(Position::parse("c4").unwrap());
+
+        assert_eq!(
+            board.legal(),
+            bb!(
+                0 0 0 0 0 0 0 0,
+                0 0 0 0 0 0 0 0,
+                0 0 1 0 1 0 0 0,
+                0 0 0 0 0 0 0 0,
+                0 0 1 0 0 0 0 0,
+                0 0 0 0 0 0 0 0,
+                0 0 0 0 0 0 0 0,
+                0 0 0 0 0 0 0 0,
+            ),
+        );
+
+        board.set(Position::parse("c3").unwrap());
+
+        assert_eq!(
+            board.legal(),
+            bb!(
+                0 0 0 0 0 0 0 0,
+                0 0 1 0 0 0 0 0,
+                0 0 0 1 0 0 0 0,
+                0 0 0 0 0 0 0 0,
+                0 0 0 0 0 1 0 0,
+                0 0 0 0 1 0 0 0,
+                0 0 0 0 0 0 0 0,
+                0 0 0 0 0 0 0 0,
+            ),
+        );
+
+        board.set(Position::parse("f5").unwrap());
+
+        assert_eq!(
+            board.legal(),
+            bb!(
+                0 0 0 0 0 0 0 0,
+                0 0 0 0 0 0 0 0,
+                0 0 0 0 0 0 0 0,
+                0 1 0 0 0 1 0 0,
+                0 0 1 0 0 0 0 0,
+                0 0 0 1 0 1 0 0,
+                0 0 0 0 0 0 0 0,
+                0 0 0 0 0 0 0 0,
+            ),
+        );
     }
 }

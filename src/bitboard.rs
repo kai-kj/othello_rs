@@ -1,44 +1,5 @@
+use crate::prelude::*;
 use std::fmt::Write;
-
-#[derive(Copy, Clone, PartialEq, Eq)]
-pub struct Position {
-    pub row: usize,
-    pub col: usize,
-}
-
-impl Position {
-    pub fn index(row: usize, col: usize) -> Self {
-        Self { row, col }
-    }
-
-    pub fn parse(s: &str) -> Option<Self> {
-        let col = s.chars().nth(0)?.to_ascii_lowercase() as i32 - 'a' as i32;
-        let row = s.chars().nth(1)?.to_ascii_lowercase() as i32 - '1' as i32;
-
-        if col >= 0 && col < 8 && row >= 0 && row < 8 {
-            Some(Self::index(row as usize, col as usize))
-        } else {
-            None
-        }
-    }
-}
-
-impl std::fmt::Debug for Position {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Move({}, {})", self.row, self.col)
-    }
-}
-
-impl std::fmt::Display for Position {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}{}",
-            ('a' as i32 + self.col as i32) as u8 as char,
-            ('1' as i32 + self.row as i32) as u8 as char,
-        )
-    }
-}
 
 pub type BitBoard = u64;
 
@@ -105,4 +66,51 @@ macro_rules! bb {
 pub(crate) use bb;
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get() {
+        let board = bb!(
+            0 0 0 0 0 0 0 0,
+            0 0 0 0 0 0 0 0,
+            0 0 0 0 0 0 0 0,
+            0 0 0 0 0 1 0 0,
+            0 0 0 1 0 0 0 0,
+            0 0 0 0 0 1 0 0,
+            0 0 0 0 0 0 0 0,
+            0 0 0 0 0 0 0 0,
+        );
+
+        assert_eq!(board.get(Position::index(3, 3)), false);
+        assert_eq!(board.get(Position::index(3, 4)), false);
+        assert_eq!(board.get(Position::index(3, 5)), true);
+
+        assert_eq!(board.get(Position::index(4, 3)), true);
+        assert_eq!(board.get(Position::index(4, 4)), false);
+        assert_eq!(board.get(Position::index(4, 5)), false);
+
+        assert_eq!(board.get(Position::index(5, 3)), false);
+        assert_eq!(board.get(Position::index(5, 4)), false);
+        assert_eq!(board.get(Position::index(5, 5)), true);
+    }
+
+    #[test]
+    fn test_pretty() {
+        let board = bb!(
+            0 0 0 0 0 0 0 0,
+            0 0 0 0 0 0 0 0,
+            0 0 0 0 0 0 0 0,
+            0 0 0 0 0 1 0 0,
+            0 0 0 1 0 0 0 0,
+            0 0 0 0 0 1 0 0,
+            0 0 0 0 0 0 0 0,
+            0 0 0 0 0 0 0 0,
+        );
+
+        assert_eq!(
+            board.pretty(),
+            "BitBoard(\n  0 0 0 0 0 0 0 0,\n  0 0 0 0 0 0 0 0,\n  0 0 0 0 0 0 0 0,\n  0 0 0 0 0 1 0 0,\n  0 0 0 1 0 0 0 0,\n  0 0 0 0 0 1 0 0,\n  0 0 0 0 0 0 0 0,\n  0 0 0 0 0 0 0 0,\n)\n"
+        )
+    }
+}

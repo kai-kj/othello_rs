@@ -1,3 +1,4 @@
 pub use crate::bitboard::*;
 pub use crate::board::*;
-pub use crate::lut::*;
+pub use crate::position::*;
+pub use crate::player::*;
